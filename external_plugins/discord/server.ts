@@ -237,6 +237,8 @@ async function gate(s: Session, msg: Message, opts?: { whitelistedBot?: boolean 
     if (groupAllowFrom.length > 0 && !groupAllowFrom.includes(senderId)) return { action: 'drop' }
     if (requireMention && !(await isMentioned(s, msg, access.mentionPatterns))) return { action: 'drop' }
   }
+  // In guild channels without requireMention, drop !-prefixed messages.
+  if (!requireMention && msg.content.startsWith('!')) return { action: 'drop' }
   return { action: 'deliver', access }
 }
 
