@@ -72,6 +72,20 @@ Example regex setup for a nickname trigger:
 /discord:access personal set mentionPatterns '["^hey claude\\b", "\\bassistant\\b"]'
 ```
 
+## User whitelist
+
+By default any user who passes the DM policy or guild channel gate can interact with the bot. Set `allowUsers` to restrict the bot globally to specific users. When set, only the listed user IDs can trigger the bot in any context — DMs and guild channels alike. Users not on the list are silently dropped.
+
+```
+/discord:access personal set allowUsers '["184695080709324800", "221773638772129792"]'
+```
+
+To remove the restriction (allow all users again):
+
+```
+/discord:access personal set allowUsers '[]'
+```
+
 ## Bot-to-bot
 
 By default all messages from bots are dropped. To let a specific bot trigger yours, add its user ID to `allowBots`. Whitelisted bots are only processed when they @mention your bot — replies and plain messages are ignored to prevent loops.
@@ -114,7 +128,7 @@ All commands take a session name as the first argument. Replace `<session>` with
 | `/discord:access <session> policy allowlist` | Set `dmPolicy`. Values: `pairing`, `allowlist`, `disabled`. |
 | `/discord:access <session> group add 846209781206941736` | Enable a guild channel. Flags: `--no-mention`, `--allow id1,id2`. |
 | `/discord:access <session> group rm 846209781206941736` | Disable a guild channel. |
-| `/discord:access <session> set ackReaction 🔨` | Set a config key: `ackReaction`, `replyToMode`, `textChunkLimit`, `chunkMode`, `mentionPatterns`, `allowBots`. |
+| `/discord:access <session> set ackReaction 🔨` | Set a config key: `ackReaction`, `replyToMode`, `textChunkLimit`, `chunkMode`, `mentionPatterns`, `allowBots`, `allowUsers`. |
 
 ## Config file
 
@@ -137,6 +151,9 @@ All commands take a session name as the first argument. Replace `<session>` with
       "allowFrom": []
     }
   },
+
+  // If set, only these user IDs can interact (DMs + guilds). Empty = all users.
+  "allowUsers": [],
 
   // Bot user IDs allowed to trigger this bot (via @mention only).
   "allowBots": [],

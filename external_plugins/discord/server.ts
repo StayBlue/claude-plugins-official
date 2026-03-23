@@ -63,6 +63,8 @@ type Access = {
   chunkMode?: 'length' | 'newline'
   /** Bot user IDs allowed to trigger the bot — only via @mention to prevent loops. */
   allowBots?: string[]
+  /** If set, only these user IDs can interact with the bot (DMs and guilds). */
+  allowUsers?: string[]
 }
 
 type SessionConfig = { name: string; stateDir: string }
@@ -124,6 +126,7 @@ function readAccessFile(s: Session): Access {
       textChunkLimit: parsed.textChunkLimit,
       chunkMode: parsed.chunkMode,
       allowBots: parsed.allowBots,
+      allowUsers: parsed.allowUsers,
     }
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return defaultAccess()
@@ -183,7 +186,7 @@ type GateResult =
   | { action: 'drop' }
   | { action: 'pair'; code: string; isResend: boolean }
 
-async function gate(s: Session, msg: Message): Promise<GateResult> {
+async function gate(s: Session, msg: Message, opts?: { whitelistedBot?: boolean }): Promise<GateResult> {
   const access = loadAccess(s)
   const pruned = pruneExpired(access)
   if (pruned) saveAccess(s, access)
@@ -191,6 +194,12 @@ async function gate(s: Session, msg: Message): Promise<GateResult> {
   if (access.dmPolicy === 'disabled') return { action: 'drop' }
 
   const senderId = msg.author.id
+
+  // Global user whitelist — if set, only these users can interact.
+  if (access.allowUsers && access.allowUsers.length > 0) {
+    if (!access.allowUsers.includes(senderId)) return { action: 'drop' }
+  }
+
   const isDM = msg.channel.type === ChannelType.DM
 
   if (isDM) {
@@ -224,8 +233,10 @@ async function gate(s: Session, msg: Message): Promise<GateResult> {
   if (!policy) return { action: 'drop' }
   const groupAllowFrom = policy.allowFrom ?? []
   const requireMention = policy.requireMention ?? true
-  if (groupAllowFrom.length > 0 && !groupAllowFrom.includes(senderId)) return { action: 'drop' }
-  if (requireMention && !(await isMentioned(s, msg, access.mentionPatterns))) return { action: 'drop' }
+  if (!opts?.whitelistedBot) {
+    if (groupAllowFrom.length > 0 && !groupAllowFrom.includes(senderId)) return { action: 'drop' }
+    if (requireMention && !(await isMentioned(s, msg, access.mentionPatterns))) return { action: 'drop' }
+  }
   return { action: 'deliver', access }
 }
 
@@ -434,14 +445,16 @@ function wireSession(s: Session): ReturnType<typeof setInterval> | null {
   })
 
   s.client.on('messageCreate', msg => {
+    let whitelistedBot = false
     if (msg.author.bot) {
       const access = loadAccess(s)
       const allowed = access.allowBots ?? []
       if (!allowed.includes(msg.author.id)) return
       // Whitelisted bots must @mention — prevents loops.
       if (!s.client.user || !msg.mentions.has(s.client.user)) return
+      whitelistedBot = true
     }
-    handleInbound(s, msg).catch(e =>
+    handleInbound(s, msg, whitelistedBot).catch(e =>
       process.stderr.write(`discord [${s.name}]: handleInbound failed: ${e}\n`),
     )
   })
@@ -458,8 +471,8 @@ function wireSession(s: Session): ReturnType<typeof setInterval> | null {
   return null
 }
 
-async function handleInbound(s: Session, msg: Message): Promise<void> {
-  const result = await gate(s, msg)
+async function handleInbound(s: Session, msg: Message, whitelistedBot = false): Promise<void> {
+  const result = await gate(s, msg, { whitelistedBot })
 
   if (result.action === 'drop') return
 

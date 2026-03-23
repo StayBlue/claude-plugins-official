@@ -143,6 +143,8 @@ Delivery/UX config. Supported keys: `ackReaction`, `replyToMode`,
 - `mentionPatterns`: JSON array of regex strings
 - `allowBots`: JSON array of bot user snowflake strings — these bots can
   trigger the bot, but only via @mention (prevents loops)
+- `allowUsers`: JSON array of user snowflake strings — if set, only these
+  users can interact with the bot (DMs and guilds)
 
 Read, set the key, write, confirm.
 
