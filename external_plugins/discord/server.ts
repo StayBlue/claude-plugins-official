@@ -61,6 +61,8 @@ type Access = {
   replyToMode?: 'off' | 'first' | 'all'
   textChunkLimit?: number
   chunkMode?: 'length' | 'newline'
+  /** Bot user IDs allowed to trigger the bot — only via @mention to prevent loops. */
+  allowBots?: string[]
 }
 
 type SessionConfig = { name: string; stateDir: string }
@@ -121,6 +123,7 @@ function readAccessFile(s: Session): Access {
       replyToMode: parsed.replyToMode,
       textChunkLimit: parsed.textChunkLimit,
       chunkMode: parsed.chunkMode,
+      allowBots: parsed.allowBots,
     }
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return defaultAccess()
@@ -431,7 +434,13 @@ function wireSession(s: Session): ReturnType<typeof setInterval> | null {
   })
 
   s.client.on('messageCreate', msg => {
-    if (msg.author.bot) return
+    if (msg.author.bot) {
+      const access = loadAccess(s)
+      const allowed = access.allowBots ?? []
+      if (!allowed.includes(msg.author.id)) return
+      // Whitelisted bots must @mention — prevents loops.
+      if (!s.client.user || !msg.mentions.has(s.client.user)) return
+    }
     handleInbound(s, msg).catch(e =>
       process.stderr.write(`discord [${s.name}]: handleInbound failed: ${e}\n`),
     )

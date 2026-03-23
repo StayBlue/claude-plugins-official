@@ -135,12 +135,14 @@ for all sessions.
 ### `<name> set <key> <value>`
 
 Delivery/UX config. Supported keys: `ackReaction`, `replyToMode`,
-`textChunkLimit`, `chunkMode`, `mentionPatterns`. Validate types:
+`textChunkLimit`, `chunkMode`, `mentionPatterns`, `allowBots`. Validate types:
 - `ackReaction`: string (emoji) or `""` to disable
 - `replyToMode`: `off` | `first` | `all`
 - `textChunkLimit`: number
 - `chunkMode`: `length` | `newline`
 - `mentionPatterns`: JSON array of regex strings
+- `allowBots`: JSON array of bot user snowflake strings — these bots can
+  trigger the bot, but only via @mention (prevents loops)
 
 Read, set the key, write, confirm.
 

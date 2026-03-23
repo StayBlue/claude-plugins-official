@@ -72,6 +72,16 @@ Example regex setup for a nickname trigger:
 /discord:access personal set mentionPatterns '["^hey claude\\b", "\\bassistant\\b"]'
 ```
 
+## Bot-to-bot
+
+By default all messages from bots are dropped. To let a specific bot trigger yours, add its user ID to `allowBots`. Whitelisted bots are only processed when they @mention your bot — replies and plain messages are ignored to prevent loops.
+
+```
+/discord:access personal set allowBots '["109876543210987654"]'
+```
+
+To find a bot's user ID: enable Developer Mode, right-click the bot's name, Copy User ID.
+
 ## Delivery
 
 Configure outbound behavior with `/discord:access <session> set <key> <value>`.
@@ -104,7 +114,7 @@ All commands take a session name as the first argument. Replace `<session>` with
 | `/discord:access <session> policy allowlist` | Set `dmPolicy`. Values: `pairing`, `allowlist`, `disabled`. |
 | `/discord:access <session> group add 846209781206941736` | Enable a guild channel. Flags: `--no-mention`, `--allow id1,id2`. |
 | `/discord:access <session> group rm 846209781206941736` | Disable a guild channel. |
-| `/discord:access <session> set ackReaction 🔨` | Set a config key: `ackReaction`, `replyToMode`, `textChunkLimit`, `chunkMode`, `mentionPatterns`. |
+| `/discord:access <session> set ackReaction 🔨` | Set a config key: `ackReaction`, `replyToMode`, `textChunkLimit`, `chunkMode`, `mentionPatterns`, `allowBots`. |
 
 ## Config file
 
@@ -127,6 +137,9 @@ All commands take a session name as the first argument. Replace `<session>` with
       "allowFrom": []
     }
   },
+
+  // Bot user IDs allowed to trigger this bot (via @mention only).
+  "allowBots": [],
 
   // Case-insensitive regexes that count as a mention.
   "mentionPatterns": ["^hey claude\\b"],
