@@ -376,7 +376,11 @@ function discoverSessions(): SessionConfig[] {
     process.stderr.write(`discord channel: sessions.json must be an array, got ${typeof arr}\n`)
     return []
   }
-  return arr.filter((e: any) => e && typeof e.name === 'string' && typeof e.stateDir === 'string')
+  const all = arr.filter((e: any) => e && typeof e.name === 'string' && typeof e.stateDir === 'string')
+  const only = process.env.DISCORD_SESSIONS?.split(',').map(s => s.trim()).filter(Boolean)
+  if (only && only.length === 1 && only[0] === 'none') return []
+  if (!only || only.length === 0) return all
+  return all.filter((e: any) => only.includes(e.name))
 }
 
 function createSession(cfg: SessionConfig): Session {
@@ -802,6 +806,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async req => {
 // ---------------------------------------------------------------------------
 
 await mcp.connect(new StdioServerTransport())
+
 
 const configs = discoverSessions()
 if (configs.length === 0) {
