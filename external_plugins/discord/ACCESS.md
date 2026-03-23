@@ -4,9 +4,9 @@ Discord only allows DMs between accounts that share a server. Who can DM your bo
 
 The **Public Bot** toggle in the Developer Portal (Bot tab, on by default) controls who can add the bot to new servers. Turn it off and only your own account can install it. This is your first gate, and it's enforced by Discord rather than by this process.
 
-For DMs that do get through, the default policy is **pairing**. An unknown sender gets a 6-character code in reply and their message is dropped. You run `/discord:access pair <code>` from your assistant session to approve them. Once approved, their messages pass through.
+For DMs that do get through, the default policy is **pairing**. An unknown sender gets a 6-character code in reply and their message is dropped. You run `/discord:access <session> pair <code>` from your assistant session to approve them. Once approved, their messages pass through.
 
-All state lives in `~/.claude/channels/discord/access.json`. The `/discord:access` skill commands edit this file; the server re-reads it on every inbound message, so changes take effect without a restart. Set `DISCORD_ACCESS_MODE=static` to pin config to what was on disk at boot (pairing is unavailable in static mode since it requires runtime writes).
+All state lives in `~/.claude/channels/discord/sessions/<session>/access.json`. The `/discord:access` skill commands edit this file; the server re-reads it on every inbound message, so changes take effect without a restart. Set `DISCORD_ACCESS_MODE=static` to pin config to what was on disk at boot (pairing is unavailable in static mode since it requires runtime writes).
 
 ## At a glance
 
@@ -15,7 +15,7 @@ All state lives in `~/.claude/channels/discord/access.json`. The `/discord:acces
 | Default policy | `pairing` |
 | Sender ID | User snowflake (numeric, e.g. `184695080709324800`) |
 | Group key | Channel snowflake — not guild ID |
-| Config file | `~/.claude/channels/discord/access.json` |
+| Config file | `~/.claude/channels/discord/sessions/<session>/access.json` |
 
 ## DM policies
 
@@ -23,12 +23,12 @@ All state lives in `~/.claude/channels/discord/access.json`. The `/discord:acces
 
 | Policy | Behavior |
 | --- | --- |
-| `pairing` (default) | Reply with a pairing code, drop the message. Approve with `/discord:access pair <code>`. |
+| `pairing` (default) | Reply with a pairing code, drop the message. Approve with `/discord:access <session> pair <code>`. |
 | `allowlist` | Drop silently. No reply. Use this once everyone who needs access is already on the list, or if pairing replies would attract spam. |
 | `disabled` | Drop everything, including allowlisted users and guild channels. |
 
 ```
-/discord:access policy allowlist
+/discord:access personal policy allowlist
 ```
 
 ## User IDs
@@ -38,8 +38,8 @@ Discord identifies users by **snowflakes**: permanent numeric IDs like `18469508
 Pairing captures the ID automatically. To add someone manually, enable **User Settings → Advanced → Developer Mode** in Discord, then right-click any user and choose **Copy User ID**. Your own ID is available by right-clicking your avatar in the lower-left.
 
 ```
-/discord:access allow 184695080709324800
-/discord:access remove 184695080709324800
+/discord:access personal allow 184695080709324800
+/discord:access personal remove 184695080709324800
 ```
 
 ## Guild channels
@@ -47,15 +47,15 @@ Pairing captures the ID automatically. To add someone manually, enable **User Se
 Guild channels are off by default. Opt each one in individually, keyed on the **channel** snowflake (not the guild). Threads inherit their parent channel's opt-in; no separate entry needed. Find channel IDs the same way as user IDs: Developer Mode, right-click the channel, Copy Channel ID.
 
 ```
-/discord:access group add 846209781206941736
+/discord:access personal group add 846209781206941736
 ```
 
 With the default `requireMention: true`, the bot responds only when @mentioned or replied to. Pass `--no-mention` to process every message in the channel, or `--allow id1,id2` to restrict which members can trigger it.
 
 ```
-/discord:access group add 846209781206941736 --no-mention
-/discord:access group add 846209781206941736 --allow 184695080709324800,221773638772129792
-/discord:access group rm 846209781206941736
+/discord:access personal group add 846209781206941736 --no-mention
+/discord:access personal group add 846209781206941736 --allow 184695080709324800,221773638772129792
+/discord:access personal group rm 846209781206941736
 ```
 
 ## Mention detection
@@ -69,18 +69,18 @@ In channels with `requireMention: true`, any of the following triggers the bot:
 Example regex setup for a nickname trigger:
 
 ```
-/discord:access set mentionPatterns '["^hey claude\\b", "\\bassistant\\b"]'
+/discord:access personal set mentionPatterns '["^hey claude\\b", "\\bassistant\\b"]'
 ```
 
 ## Delivery
 
-Configure outbound behavior with `/discord:access set <key> <value>`.
+Configure outbound behavior with `/discord:access <session> set <key> <value>`.
 
 **`ackReaction`** reacts to inbound messages on receipt as a "seen" acknowledgment. Unicode emoji work directly; custom server emoji require the full `<:name:id>` form. The emoji ID is at the end of the URL when you right-click the emoji and copy its link. Empty string disables.
 
 ```
-/discord:access set ackReaction 🔨
-/discord:access set ackReaction ""
+/discord:access personal set ackReaction 🔨
+/discord:access personal set ackReaction ""
 ```
 
 **`replyToMode`** controls threading on chunked replies. When a long response is split, `first` (default) threads only the first chunk under the inbound message; `all` threads every chunk; `off` sends all chunks standalone.
@@ -91,21 +91,24 @@ Configure outbound behavior with `/discord:access set <key> <value>`.
 
 ## Skill reference
 
+All commands take a session name as the first argument. Replace `<session>` with your session name (e.g. `personal`, `work`).
+
 | Command | Effect |
 | --- | --- |
-| `/discord:access` | Print current state: policy, allowlist, pending pairings, enabled channels. |
-| `/discord:access pair a4f91c` | Approve pairing code `a4f91c`. Adds the sender to `allowFrom` and sends a confirmation on Discord. |
-| `/discord:access deny a4f91c` | Discard a pending code. The sender is not notified. |
-| `/discord:access allow 184695080709324800` | Add a user snowflake directly. |
-| `/discord:access remove 184695080709324800` | Remove from the allowlist. |
-| `/discord:access policy allowlist` | Set `dmPolicy`. Values: `pairing`, `allowlist`, `disabled`. |
-| `/discord:access group add 846209781206941736` | Enable a guild channel. Flags: `--no-mention`, `--allow id1,id2`. |
-| `/discord:access group rm 846209781206941736` | Disable a guild channel. |
-| `/discord:access set ackReaction 🔨` | Set a config key: `ackReaction`, `replyToMode`, `textChunkLimit`, `chunkMode`, `mentionPatterns`. |
+| `/discord:access` | Print current state for all sessions: policy, allowlist, pending pairings, enabled channels. |
+| `/discord:access <session>` | Print state for a specific session. |
+| `/discord:access <session> pair a4f91c` | Approve pairing code `a4f91c`. Adds the sender to `allowFrom` and sends a confirmation on Discord. |
+| `/discord:access <session> deny a4f91c` | Discard a pending code. The sender is not notified. |
+| `/discord:access <session> allow 184695080709324800` | Add a user snowflake directly. |
+| `/discord:access <session> remove 184695080709324800` | Remove from the allowlist. |
+| `/discord:access <session> policy allowlist` | Set `dmPolicy`. Values: `pairing`, `allowlist`, `disabled`. |
+| `/discord:access <session> group add 846209781206941736` | Enable a guild channel. Flags: `--no-mention`, `--allow id1,id2`. |
+| `/discord:access <session> group rm 846209781206941736` | Disable a guild channel. |
+| `/discord:access <session> set ackReaction 🔨` | Set a config key: `ackReaction`, `replyToMode`, `textChunkLimit`, `chunkMode`, `mentionPatterns`. |
 
 ## Config file
 
-`~/.claude/channels/discord/access.json`. Absent file is equivalent to `pairing` policy with empty lists, so the first DM triggers pairing.
+`~/.claude/channels/discord/sessions/<session>/access.json`. Absent file is equivalent to `pairing` policy with empty lists, so the first DM triggers pairing.
 
 ```jsonc
 {

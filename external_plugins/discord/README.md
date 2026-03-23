@@ -1,15 +1,15 @@
 # Discord
 
-Connect a Discord bot to your Claude Code with an MCP server.
+Connect one or more Discord bots to your Claude Code with an MCP server.
 
-When the bot receives a message, the MCP server forwards it to Claude and provides tools to reply, react, and edit messages.
+When a bot receives a message, the MCP server forwards it to Claude and provides tools to reply, react, and edit messages. Each bot runs as a named **session** with its own token, access policy, and state directory.
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) — the MCP server runs on Bun. Install with `curl -fsSL https://bun.sh/install | bash`.
 
 ## Quick Setup
-> Default pairing flow for a single-user DM bot. See [ACCESS.md](./ACCESS.md) for groups and multi-user setups.
+> Default pairing flow for a single-session DM bot. See [ACCESS.md](./ACCESS.md) for groups and multi-user setups.
 
 **1. Create a Discord application and bot.**
 
@@ -52,12 +52,10 @@ Install the plugin:
 **5. Give the server the token.**
 
 ```
-/discord:configure MTIz...
+/discord:configure personal MTIz...
 ```
 
-Writes `DISCORD_BOT_TOKEN=...` to `~/.claude/channels/discord/.env`. You can also write that file by hand, or set the variable in your shell environment — shell takes precedence.
-
-> To run multiple bots on one machine (different tokens, separate allowlists), point `DISCORD_STATE_DIR` at a different directory per instance.
+Creates a session named `personal` and writes `DISCORD_BOT_TOKEN=...` to `~/.claude/channels/discord/sessions/personal/.env`. Pick any short name — `work`, `personal`, `dev`, etc.
 
 **6. Relaunch with the channel flag.**
 
@@ -72,14 +70,40 @@ claude --channels plugin:discord@claude-plugins-official
 With Claude Code running from the previous step, DM your bot on Discord — it replies with a pairing code. If the bot doesn't respond, make sure your session is running with `--channels`. In your Claude Code session:
 
 ```
-/discord:access pair <code>
+/discord:access personal pair <code>
 ```
 
 Your next DM reaches the assistant.
 
 **8. Lock it down.**
 
-Pairing is for capturing IDs. Once you're in, switch to `allowlist` so strangers don't get pairing-code replies. Ask Claude to do it, or `/discord:access policy allowlist` directly.
+Pairing is for capturing IDs. Once you're in, switch to `allowlist` so strangers don't get pairing-code replies. Ask Claude to do it, or `/discord:access personal policy allowlist` directly.
+
+## Multiple Bots
+
+Run multiple Discord bots in a single plugin instance by creating additional sessions:
+
+```
+/discord:configure work <work-bot-token>
+/discord:configure personal <personal-bot-token>
+```
+
+Each session gets its own state directory under `~/.claude/channels/discord/sessions/<name>/` with independent `.env`, `access.json`, `approved/`, and `inbox/` directories.
+
+Messages include a `session` attribute so replies route to the correct bot automatically. When multiple sessions are active, tools require the `session` parameter.
+
+### sessions.json
+
+Sessions are tracked in `~/.claude/channels/discord/sessions.json`:
+
+```json
+[
+  { "name": "personal", "stateDir": "/home/you/.claude/channels/discord/sessions/personal" },
+  { "name": "work", "stateDir": "/home/you/.claude/channels/discord/sessions/work" }
+]
+```
+
+This file is managed by `/discord:configure` — you shouldn't need to edit it by hand.
 
 ## Access control
 
@@ -87,15 +111,25 @@ See **[ACCESS.md](./ACCESS.md)** for DM policies, guild channels, mention detect
 
 Quick reference: IDs are Discord **snowflakes** (numeric — enable Developer Mode, right-click → Copy ID). Default policy is `pairing`. Guild channels are opt-in per channel ID.
 
+All access commands take a session name as the first argument:
+
+```
+/discord:access personal pair <code>
+/discord:access work allow <userId>
+/discord:access personal policy allowlist
+```
+
 ## Tools exposed to the assistant
 
 | Tool | Purpose |
 | --- | --- |
-| `reply` | Send to a channel. Takes `chat_id` + `text`, optionally `reply_to` (message ID) for native threading and `files` (absolute paths) for attachments — max 10 files, 25MB each. Auto-chunks; files attach to the first chunk. Returns the sent message ID(s). |
+| `reply` | Send to a channel. Takes `session`, `chat_id` + `text`, optionally `reply_to` (message ID) for native threading and `files` (absolute paths) for attachments — max 10 files, 25MB each. Auto-chunks; files attach to the first chunk. Returns the sent message ID(s). |
 | `react` | Add an emoji reaction to any message by ID. Unicode emoji work directly; custom emoji need `<:name:id>` form. |
 | `edit_message` | Edit a message the bot previously sent. Useful for "working…" → result progress updates. Only works on the bot's own messages. |
 | `fetch_messages` | Pull recent history from a channel (oldest-first). Capped at 100 per call. Each line includes the message ID so the model can `reply_to` it; messages with attachments are marked `+Natt`. Discord's search API isn't exposed to bots, so this is the only lookback. |
-| `download_attachment` | Download all attachments from a specific message by ID to `~/.claude/channels/discord/inbox/`. Returns file paths + metadata. Use when `fetch_messages` shows a message has attachments. |
+| `download_attachment` | Download all attachments from a specific message by ID to the session's `inbox/` directory. Returns file paths + metadata. Use when `fetch_messages` shows a message has attachments. |
+
+All tools accept an optional `session` parameter. When only one session is active, it's auto-selected.
 
 Inbound messages trigger a typing indicator automatically — Discord shows
 "botname is typing…" while the assistant works on a response.
@@ -105,7 +139,7 @@ Inbound messages trigger a typing indicator automatically — Discord shows
 Attachments are **not** auto-downloaded. The `<channel>` notification lists
 each attachment's name, type, and size — the assistant calls
 `download_attachment(chat_id, message_id)` when it actually wants the file.
-Downloads land in `~/.claude/channels/discord/inbox/`.
+Downloads land in the session's `inbox/` directory.
 
 Same path for attachments on historical messages found via `fetch_messages`
 (messages with attachments are marked `+Natt`).
